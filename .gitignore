@@ -2,8 +2,10 @@
 .cache
 .idea
 __pycache__
+gtk-hypermd
 data/dist
 data/gschemas.compiled
 dist/
+gresource.c
 node_modules
 package-lock.json

@@ -17,5 +17,9 @@
       <default>1.0</default>
       <summary>WebKit zoom level.</summary>
     </key>
+    <key name="toplevel" type="as">
+      <default>[]</default>
+      <summary>List of top-level folders to load by default.</summary>
+    </key>
   </schema>
 </schemalist>

@@ -11,45 +11,57 @@ require("codemirror/mode/yaml/yaml");
 require("hypermd/powerpack/fold-math-with-katex")
 require("hypermd/powerpack/hover-with-marked")
 
-var hmdTextArea = document.getElementById("hmdtextarea")
-
-var hmd = HyperMD.fromTextArea(hmdTextArea, {
-  autofocus: false,
-  foldGutter: false,
-  hmdModeLoader: false,
-  lineNumbers: false
-})
-window.hmd = hmd;
-
-window.hmdSaveTimer = -1;
-hmd.on('change', function() {
-  if (window.hmdSaveTimer != -1) {
-    window.clearTimeout(window.hmdSaveTimer);
+class HMD {
+  constructor(params) {
+    this.textArea = document.getElementById("hmdtextarea");
+    this.hyperMD = HyperMD.fromTextArea(this.textArea, {
+      autofocus: false,
+      foldGutter: false,
+      hmdModeLoader: false,
+      lineNumbers: false
+    });
+    this.hyperMD.on("change", cm => { this.onChange(); });
+    this.hyperMD.setCursor(1);
+    this.hyperMD.focus();
+    this.bufferId = params != null ? params.bufferId : -1;
+    this.bufferHash = params != null ? params.bufferHash : "";
+    this.apiUri = params != null ? params.apiUri : "";
+    this.apiUri = this.apiUri.replace(/\/$/, "");
+    this.token = params != null ? params.token : "";
+    this.sendTimer = -1;
   }
-  if (window.hmdUnsavedTimer == -1) {
-    window.hmdUnsavedTimer = window.setTimeout(function() {
-      if (!document.title.endsWith('*')) {
-        document.title = document.title + '*';
+
+  onChange() {
+    if (this.sendTimer != -1) {
+      window.clearTimeout(this.sendTimer);
+    }
+    this.sendTimer = window.setTimeout(() => {
+      this.sendUpdate();
+      this.sendTimer = -1;
+    }, 250);
+  }
+
+  sendUpdate() {
+    fetch(this.apiUri + "/update", {
+      method: "post",
+      body: JSON.stringify({
+        "content": this.hyperMD.getValue(),
+        "bufferId": this.bufferId,
+        "bufferHash": this.bufferHash,
+        "token": this.token,
+      })
+    })
+    .then(response => response.json())
+    .then(response => {
+      if (response.error != null) {
+        // TODO: give a choice to overwrite or reload
+        alert(response.error);
+      } else {
+        this.bufferHash = response.bufferHash;
       }
-      window.hmdUnsavedTimer = -1;
-    }, 500);
+    });
   }
-  window.hmdSaveTimer = window.setTimeout(
-    function() {
-      (fetch(window.location.href + '?api=on_change&buffer_id=' + window.hmdBufferId, {})
-      .then(response => response.text())
-      .then(text => {
-        if (text.trim() == 'saved') {
-          document.title = document.title.replace('*', '');
-          window.clearTimeout(window.hmdUnsavedTimer);
-        }
-      }));
-      window.hmdSaveTimer = -1;
-    },
-    250);
-});
+}
 
+window.hmd = new HMD(window.hmdParams);
 document.title = decodeURIComponent(window.location.href.split('/').pop());
-
-window.hmd.setCursor(1);
-window.hmd.focus();

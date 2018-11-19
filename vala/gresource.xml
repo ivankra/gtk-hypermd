@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/me/ivank/gtk-hypermd/data">
+    <file compressed="true" preprocess="xml-stripblanks">MainWindow.ui</file>
+  </gresource>
+</gresources>

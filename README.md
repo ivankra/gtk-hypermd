@@ -5,7 +5,7 @@ Minimalistic WYSIWIG Markdown editor and note-taking application for GTK+/GNOME 
 Featuring:
 * HyperMD, a WYSIWIG Markdown editor: break the Wall between writing and previewing
 * Uncluttered interface with a modern GTK+/GNOME look
-* Tray-icon mode
-* Free, open-source and privacy conscious: no cloud, no tracking, no telemetry and other nonsense like that
+* Tray-icon mode: your notes are always just a click away
+* Free, open-source and privacy conscious: no cloud (possibly an option later), no tracking, no telemetry and other nonsense like that
 
-The software is at the moment usable, basic functions work, but is still very much an early alpha/prototype and far from feature complete.
+The software at the moment is an early prototype, basic function work, but is far from feature complete.
