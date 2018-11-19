@@ -1,0 +1,9 @@
+*.ui~
+.cache
+.idea
+__pycache__
+data/dist
+data/gschemas.compiled
+dist/
+node_modules
+package-lock.json

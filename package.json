@@ -1,0 +1,19 @@
+{
+  "name": "gtk-hypermd",
+  "version": "0.0.1",
+  "description": "",
+  "main": "view.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "codemirror": "^5.40.2",
+    "hypermd": "^0.3.11",
+    "katex": "^0.10.0-rc.1",
+    "marked": "^0.5.1",
+    "parcel-bundler": "^1.10.3"
+  }
+}
