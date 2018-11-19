@@ -5,6 +5,7 @@ import sys
 from gi.repository import GLib, Gio, Gtk
 from pathlib import Path
 
+from .buffers import Buffers
 from .window import Window
 
 APP_ID = 'me.ivank.gtk-hypermd'
@@ -19,7 +20,8 @@ class Application(Gtk.Application):
                              GLib.OptionFlags.NONE, GLib.OptionArg.NONE,
                              'Enable tray mode', None)
 
-        self.data_path = Path(__file__).absolute().parents[2] / 'data'
+        self.buffers = Buffers()
+        self.base_path = Path(__file__).absolute().parents[2]  # repo root
         self.gsettings = None
         self.options = {}
 
@@ -35,22 +37,24 @@ class Application(Gtk.Application):
     def do_activate(self):
         if len(self.get_windows()) == 0:
             window = Window(self, tray=self.options.get('tray', False))
-            window.view.load(self.data_path.parent / 'README.md')
+            window.view.load(self.base_path / 'README.md')
             window.show()
-
-    def get_data_path(self, rel_path='') -> Path:
-        return self.data_path / Path('/' + rel_path).resolve().relative_to('/')
+        else:
+            # activated because user tried to start another instance
+            for window in self.get_windows():
+                window.show()
 
     def create_gsettings(self):
         schema_source = Gio.SettingsSchemaSource.new_from_directory(
-            self.data_path.as_posix(), Gio.SettingsSchemaSource.get_default(), False)
+            (self.base_path / 'data').as_posix(),
+            Gio.SettingsSchemaSource.get_default(), False)
         schema = schema_source.lookup(self.get_application_id(), False)
         return Gio.Settings.new_full(schema, None, None)
 
     def load_default_window_state(self):
         state = dict()
         state['width'], state['height'], state['x'], state['y'] = \
-            self.gsettings.get_value('window-state')
+            self.gsettings.get_value('window-geometry')
         state['sidebar-width'] = \
             self.gsettings.get_value('sidebar-width').get_int32()
         return state
@@ -58,6 +62,6 @@ class Application(Gtk.Application):
     def save_default_window_state(self, state):
         val = (state['width'], state['height'], state['x'], state['y'])
         val = GLib.Variant.new_tuple(*[GLib.Variant('i', i) for i in val])
-        self.gsettings.set_value('window-state', val)
+        self.gsettings.set_value('window-geometry', val)
         self.gsettings.set_value('sidebar-width',
                                  GLib.Variant('i', state['sidebar-width']))

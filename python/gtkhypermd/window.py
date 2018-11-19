@@ -1,5 +1,5 @@
-from gi.repository import GLib, Gdk, Gtk
-
+from gi.repository import GLib, Gdk, Gtk, Gio
+from pathlib import Path
 from .view import AppView
 from .sidebar import Sidebar
 
@@ -9,7 +9,7 @@ class Window(object):
         self.app = app
 
         self.builder = Gtk.Builder()
-        self.builder.add_from_file(self.app.get_data_path('window.ui').as_posix())
+        self.builder.add_from_file((self.app.base_path / 'data/window.ui').as_posix())
         self.builder.connect_signals(self)
 
         self.window = self.builder.get_object('window')
@@ -18,17 +18,34 @@ class Window(object):
         self.window.connect('configure-event', self.on_configure_event)
         self.resize_timer_id = None
 
-        self.sidebar = Sidebar(self.app.get_data_path().parent)
-        self.sidebar.connect('path-selected', self.on_sidebar_path_selected)
-        self.builder.get_object('scrolled_side').add(self.sidebar)
+        self.sidebar = Sidebar(app=app)
+        for s in ['~/Notes', '~/.ws/notes', self.app.base_path]:
+            path = Path(s).expanduser()
+            if path.exists() and path.is_dir():
+                print('Opening folder:', path)
+                self.sidebar.add_toplevel(path)
+                break
+
+        self.sidebar.connect('file-selected', self.on_sidebar_file_selected)
+        self.builder.get_object('sidebar_box').add(self.sidebar)
 
         self.view = AppView(app)
         self.view.connect('update-title', self.on_view_update_title)
+        self.view.connect('update-back',
+            lambda obj, is_enabled: self.ui('headerbar_back').set_sensitive(is_enabled))
+        self.view.connect('update-next',
+            lambda obj, is_enabled: self.ui('headerbar_next').set_sensitive(is_enabled))
         self.builder.get_object('viewport').add(self.view.webview)
+
+        icon_path = (self.app.base_path / 'data/icon-light.png').as_posix()
+        self.window.set_icon_from_file(icon_path)
+        f = Gio.File.new_for_path(icon_path)
+        gicon = Gio.FileIcon.new(f)
+        self.ui('headerbar_menu_icon').set_from_gicon(gicon, Gtk.IconSize.MENU)
 
         if tray:
             self.tray_icon = Gtk.StatusIcon()
-            self.tray_icon.set_from_file(self.app.get_data_path('icon-light.png').as_posix())
+            self.tray_icon.set_from_file(icon_path)
             self.tray_icon.set_tooltip_text('GTK HyperMD')
             self.tray_icon.connect('activate', self.on_tray_icon_activate)
             #self.tray_icon.connect('popup-menu', self.on_tray_icon_menu)
@@ -100,6 +117,15 @@ class Window(object):
         else:
             self.show()
 
+    def on_menu_new_window_clicked(self, widget):
+        pass
+
+    def on_menu_open_clicked(self, widget):
+        pass
+
+    def on_menu_about_clicked(self, widget):
+        self.view.load(self.app.base_path / 'README.md')
+
     def on_menu_quit_clicked(self, widget):
         self.app.quit()
 
@@ -135,5 +161,33 @@ class Window(object):
         self.ui('headerbar_title').set_text(title)
         self.window.set_title(title)
 
-    def on_sidebar_path_selected(self, obj, path):
+    def on_sidebar_file_selected(self, obj, path):
+        self.view.load(path)
+
+    def on_headerbar_back_clicked(self, widget):
+        self.view.webview.go_back()
+
+    def on_headerbar_next_clicked(self, widget):
+        self.view.webview.go_forward()
+
+    def on_headerbar_new_clicked(self, widget):
+        item = self.sidebar.get_selected()
+        if item is None:
+            item = self.sidebar.root_folder
+        if not hasattr(item, 'path'):
+            return
+
+        path = item.path
+        while path.exists() and not path.is_dir():
+            path = path.parent
+
+        for n in range(1000):
+            fpath = path / ('Untitled%s.md' % ('' if n == 0 else n))
+            if not fpath.exists():
+                path = fpath
+                break
+
+        print('Creating %s' % path)
+        path.open('w').write('# %s\n' % path.stem)
+        self.sidebar.refresh()
         self.view.load(path)

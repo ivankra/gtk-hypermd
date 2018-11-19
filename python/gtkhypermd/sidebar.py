@@ -1,103 +1,154 @@
-# TOOD: Use Granite.WidgetsSourceList after gi bindings are fixed
+# TODO get get_context_menu override working
+
 import os
 
-from gi.repository import GLib, GObject, Gio, Gtk
+from gi.repository import GLib, GObject, Gio, Gtk, Granite
 from pathlib import Path
 
+from .buffers import RenameOp
+from .util import cached_property
 
-class TreeItem(object):
-    def __init__(self, path=None):
+
+class DummyItem(Granite.WidgetsSourceListItem):
+    """Dummy item to put inside of a collapsed folder item."""
+
+    def __init__(self):
+        super().__init__(name='(empty)')
+
+
+class FileItem(Granite.WidgetsSourceListItem):
+    def __init__(self, path, sidebar):
+        super().__init__(name=path.name)
+        self.set_icon(Gio.ThemedIcon.new('text-x-generic'))
+        self.set_editable(True)
+        self.connect('edited', sidebar.on_item_edited)
         self.path = path
-        self.is_dir = self.path and self.path.exists() and self.path.is_dir()
 
-    def __str__(self):
-        return self.path.as_posix() if self.path else '<dummy>'
+    def do_get_context_menu(self):
+        print('FileItem.get_context_menu')
+
+
+class FolderItem(Granite.WidgetsSourceListExpandableItem):
+    def __init__(self, path, sidebar):
+        super().__init__(name=path.name)
+        self.set_icon(Gio.ThemedIcon.new('folder'))
+        self.set_editable(True)
+        self.connect('edited', sidebar.on_item_edited)
+        self.connect('toggled', self.on_toggled)
+        self.path = path
+        self._children = []
+        self._sidebar = sidebar
+        self.add(DummyItem())
+
+    def add(self, item):
+        self._children.append(item)
+        super().add(item)
+
+    def clear(self):
+        self._children = []
+        super().clear()
+
+    def on_toggled(self, widget, **args):
+        self.refresh()
+
+    def refresh(self):
+        filenames = self.listdir()
+        has_dummy = (len(self._children) == 1 and
+                     type(self._children[0]) is DummyItem)
+
+        if not self.get_expanded():
+            if len(filenames) == 0:
+                self.clear()
+            elif len(filenames) > 0 and not has_dummy:
+                self.clear()
+                self.add(DummyItem())
+            return
+
+        if has_dummy:
+            self.clear()
+
+        old_items = {}
+        for item in self._children:
+            old_items[item.path.name] = item
+
+        if set(old_items.keys()) != set(filenames):
+            self.clear()
+            for filename in filenames:
+                path = self.path / filename
+                item = old_items.get(filename, None)
+                if item is None:
+                    if path.is_dir():
+                        item = FolderItem(path, self._sidebar)
+                    else:
+                        item = FileItem(path, self._sidebar)
+                self.add(item)
+
+        for item in self._children:
+            if type(item) is FolderItem:
+                item.refresh()
 
     def listdir(self):
         files = sorted(os.listdir(self.path.as_posix()))
         files = [s for s in files if not s.startswith('.')]
         dirs = [s for s in files if (self.path / s).is_dir()]
         files = [s for s in files if s not in dirs and s.endswith('.md')]
-        files = dirs + files
-        return [TreeItem(self.path / s) for s in files]
+        return dirs + files
 
-class Sidebar(Gtk.TreeView):
+    def do_get_context_menu(self):
+        print('FolderItem.get_context_menu')
+        return self._sidebar.sidebar_menu
+
+
+
+class Sidebar(Granite.WidgetsSourceList):
     __gsignals__ = {
-        'path-selected': (GObject.SIGNAL_RUN_LAST, None, (str,)),  # path
+        'file-selected': (GObject.SIGNAL_RUN_LAST, None, (str,)),  # path
     }
 
-    def __init__(self, root_path):
-        Gtk.TreeView.__init__(self)
+    def __init__(self, app):
+        super().__init__(root=Granite.WidgetsSourceListExpandableItem())
 
-        self.set_headers_visible(False)
-        self.set_activate_on_single_click(True)
-        self.connect('row-activated', self.on_row_activated)
-        self.connect('row-expanded', self.on_row_expanded)
+        self.app = app
+        self.buffers = app.buffers
+        self.buffers.connect('on-rename', self.on_buffers_rename)
 
-        self.model = Gtk.TreeStore(object)
-        self.dummy_item = TreeItem()
-        it = self.model.append(None, [TreeItem(root_path)])
-        self.model.append(it, [self.dummy_item])
-        self.set_model(self.model)
-        self.expand_row(Gtk.TreePath(), False)
+        self.builder = Gtk.Builder()
+        self.builder.add_from_file((self.app.base_path / 'data/window.ui').as_posix())
+        self.sidebar_menu = self.builder.get_object('sidebar_menu')
 
-        column = Gtk.TreeViewColumn('name')
-
-        cell = Gtk.CellRendererPixbuf()
-        column.pack_start(cell, False)
-        column.set_cell_data_func(cell, self.render_icon)
-
-        cell = Gtk.CellRendererText()
-        column.pack_start(cell, False)
-        column.set_cell_data_func(cell, self.render_text)
-
-        self.append_column(column)
+        self.toplevels = []
 
         self.get_style_context().add_class('sidebar')
+        for child in self:
+            if hasattr(child, 'set_activate_on_single_click'):  # TreeView
+                child.get_style_context().add_class('sidebar')
+                child.set_activate_on_single_click(True)
 
-    def render_icon(self, column, cell, model, tree_iter, data):
-        item = model[tree_iter][0]
-        if item is self.dummy_item:
-            cell.set_property('icon-name', None)
-        elif not item.is_dir:
-            cell.set_property('icon-name', 'text-x-generic')
-        #elif cell.get_property('is-expanded'):
-        #    cell.set_property('icon-name', 'folder-open')
-        else:
-            cell.set_property('icon-name', 'folder')
+        self.connect('item-selected', self.on_item_selected)
 
-    def render_text(self, column, cell, model, tree_iter, data):
-        item = model[tree_iter][0]
-        if item is self.dummy_item:
-            html = '<i>(empty)</i>'
-        else:
-            html = GLib.markup_escape_text(item.path.name)
-        cell.set_property('markup', html)
+    def add_toplevel(self, path: Path):
+        """Add a top level folder item."""
+        item = FolderItem(path, self)
+        self.toplevels.append(item)
+        self.get_root().add(item)
+        item.refresh()
+        item.expand_with_parents()
 
-    def expand_model_at_iter(self, tree_iter):
-        item = self.model[tree_iter][0]
+    def refresh(self):
+        for item in self.toplevels:
+            item.refresh()
 
-        dummy_iter = self.model.iter_children(tree_iter)
-        if dummy_iter is not None and self.model[dummy_iter][0] is not self.dummy_item:
-            return
+    def on_item_selected(self, widget, item):
+        if item and type(item) is FileItem:
+            self.emit('file-selected', item.path.as_posix())
 
-        sub_items = item.listdir()
-        if len(sub_items) == 0:
-            self.model.append(tree_iter, [self.dummy_item])
-        else:
-            for sub_item in sub_items:
-                sub_iter = self.model.append(tree_iter, [sub_item])
-                if sub_item.is_dir:
-                    self.model.append(sub_iter, [self.dummy_item])
+    def on_item_edited(self, item, new_name):
+        if item is None: return
+        if type(item) not in (FileItem, FolderItem): return
 
-        if dummy_iter is not None:
-            self.model.remove(dummy_iter)
+        old_path = item.path
+        new_path = old_path.parent / new_name
+        self.buffers.rename(RenameOp(old_path, new_path))
 
-    def on_row_expanded(self, widget, tree_iter, tree_path):
-        self.expand_model_at_iter(tree_iter)
-
-    def on_row_activated(self, widget, tree_iter, tree_path):
-        item = self.model[tree_iter][0]
-        if item is self.dummy_item: return
-        if not item.path.exists() or item.path.is_dir(): return
-        self.emit('path-selected', item.path.absolute().as_posix())
+    def on_buffers_rename(self, obj, rename_op):
+        self.refresh()

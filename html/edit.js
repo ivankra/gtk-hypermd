@@ -36,7 +36,7 @@ hmd.on('change', function() {
   }
   window.hmdSaveTimer = window.setTimeout(
     function() {
-      (fetch(window.location.href + '?api=on_change', {})
+      (fetch(window.location.href + '?api=on_change&buffer_id=' + window.hmdBufferId, {})
       .then(response => response.text())
       .then(text => {
         if (text.trim() == 'saved') {

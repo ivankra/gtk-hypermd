@@ -1,13 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <schemalist>
   <schema id="me.ivank.gtk-hypermd" path="/me/ivank/gtk-hypermd/">
-    <key name="window-state" type="(iiii)">
+    <key name="window-geometry" type="(iiii)">
       <default>(1200, 800, 50, 50)</default>
-      <summary>Window size and position: (width, height, xpos, ypos)</summary>
+      <summary>Window size and position: (width, height, x, y)</summary>
+    </key>
+    <key name="sidebar-hidden" type="b">
+      <default>false</default>
+      <summary>Hide sidebar.</summary>
     </key>
     <key name="sidebar-width" type="i">
       <default>300</default>
       <summary>Sidebar width.</summary>
+    </key>
+    <key name="zoom-level" type="d">
+      <default>1.0</default>
+      <summary>WebKit zoom level.</summary>
     </key>
   </schema>
 </schemalist>
