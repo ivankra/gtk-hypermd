@@ -9,3 +9,7 @@ Featuring:
 * Free, open-source and privacy conscious: no cloud (possibly an option later), no tracking, no telemetry and other nonsense like that
 
 The software at the moment is an early prototype, basic function work, but is far from feature complete.
+
+## Screenshot
+
+![](https://raw.githubusercontent.com/ivankra/gtk-hypermd/vala/data/screenshot.png)
